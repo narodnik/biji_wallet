@@ -1,8 +1,12 @@
+#ifndef BIJIWALLET_GET_HISTORY_IPP
+#define BIJIWALLET_GET_HISTORY_IPP
+
 #include <atomic>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <bitcoin/client.hpp>
+#include "config.hpp"
 
 namespace bcs = bc;
 namespace bcc = bc::client;
@@ -16,8 +20,9 @@ std::optional<history_map> get_history(const auto& addresses)
     zmq::context context;
     zmq::socket socket(context, zmq::socket::role::dealer);
 
-    const auto endpoint = bcs::config::endpoint(
-        "tcp://mainnet.libbitcoin.net:9091");
+    std::cout << "Connecting to " << blockchain_server_address
+        << "..." << std::endl;
+    const auto endpoint = bcs::config::endpoint(blockchain_server_address);
 
     if (socket.connect(endpoint) != bcs::error::success)
     {
@@ -70,4 +75,6 @@ std::optional<history_map> get_history(const auto& addresses)
 
     return histories;
 }
+
+#endif // BIJIWALLET_GET_HISTORY_IPP
 

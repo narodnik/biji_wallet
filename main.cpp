@@ -1,6 +1,7 @@
 #include <bitcoin/bitcoin.hpp>
 #include <bitcoin/client.hpp>
 
+#include "config.hpp"
 #include "get_history.ipp"
 
 namespace bcs = bc;
@@ -33,12 +34,20 @@ auto convert_keys_to_addresses(const auto& keys)
     std::vector<bcs::wallet::payment_address> addresses;
     for (const auto& secret: keys)
     {
-        bcs::wallet::payment_address address(secret);
-        addresses.push_back(address);
+        if (is_testnet)
+        {
+            bcs::wallet::ec_private privat(
+                secret, bcs::wallet::ec_private::testnet);
+            addresses.emplace_back(privat);
+        }
+        else
+            addresses.emplace_back(secret);
     }
     // Add a fake address
-    bcs::wallet::payment_address fake("1F2CaWdxuVH7yLEVgzGrqWAGPYJPH5DsHN");
-    addresses.push_back(fake);
+    //if (is_testnet)
+    //    addresses.emplace_back("tb1q0k5k9u68n7hm56a0wvk6dd9ex4ktwatllwy7n3");
+    //else
+    //    addresses.emplace_back("1F2CaWdxuVH7yLEVgzGrqWAGPYJPH5DsHN");
     return addresses;
 }
 
@@ -70,6 +79,16 @@ void display_history(const auto& histories)
 int main()
 {
     std::vector<bcs::ec_secret> keys;
+
+    if (is_testnet)
+    {
+        std::cout << "Running on testnet" << std::endl;
+
+        bcs::wallet::ec_private privat(
+            "cVks5KCc8BBVhWnTJSLjr5odLbNrWK9UY4KprciJJ9dqiDBenhzr",
+            bcs::wallet::ec_private::testnet_p2kh);
+        keys.push_back(privat.secret());
+    }
 
     while (true)
     {
