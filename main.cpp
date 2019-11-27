@@ -1,3 +1,4 @@
+#include <fstream>
 #include <bitcoin/bitcoin.hpp>
 #include <bitcoin/client.hpp>
 
@@ -81,20 +82,40 @@ auto prompt_destinations()
 
 void save_keys(const auto& keys, const auto& filename)
 {
+    std::ofstream fstream(filename);
+    for (const auto& key: keys)
+    {
+        const auto key_string = bc::encode_base16(key);
+        fstream.write(key_string.data(), key_string.size());
+        fstream.put('\n');
+    }
+}
+void load_keys(auto& keys, const auto& filename)
+{
+    std::ifstream fstream(filename);
+    std::string line;
+    while (std::getline(fstream, line))
+    {
+        bcs::ec_secret secret;
+        bool rc = bcs::decode_base16(secret, line);
+        BITCOIN_ASSERT(rc);
+        keys.push_back(secret);
+    }
 }
 
 int main()
 {
     std::vector<bcs::ec_secret> keys;
+    load_keys(keys, "wallet.dat");
 
     if (is_testnet)
     {
         std::cout << "Running on testnet" << std::endl;
 
-        bcs::wallet::ec_private privat(
-            "cVks5KCc8BBVhWnTJSLjr5odLbNrWK9UY4KprciJJ9dqiDBenhzr",
-            bcs::wallet::ec_private::testnet_p2kh);
-        keys.push_back(privat.secret());
+        //bcs::wallet::ec_private privat(
+        //    "cVks5KCc8BBVhWnTJSLjr5odLbNrWK9UY4KprciJJ9dqiDBenhzr",
+        //    bcs::wallet::ec_private::testnet_p2kh);
+        //keys.push_back(privat.secret());
     }
 
     bool is_exit = false;
