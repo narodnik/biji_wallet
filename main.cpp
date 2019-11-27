@@ -43,11 +43,6 @@ auto convert_keys_to_addresses(const auto& keys)
         else
             addresses.emplace_back(secret);
     }
-    // Add a fake address
-    //if (is_testnet)
-    //    addresses.emplace_back("tb1q0k5k9u68n7hm56a0wvk6dd9ex4ktwatllwy7n3");
-    //else
-    //    addresses.emplace_back("1F2CaWdxuVH7yLEVgzGrqWAGPYJPH5DsHN");
     return addresses;
 }
 
@@ -76,6 +71,18 @@ void display_history(const auto& histories)
     }
 }
 
+auto prompt_destinations()
+{
+    std::vector<std::tuple<bcs::wallet::payment_address, uint64_t>>
+        destinations;
+
+    return destinations;
+}
+
+void save_keys(const auto& keys, const auto& filename)
+{
+}
+
 int main()
 {
     std::vector<bcs::ec_secret> keys;
@@ -90,12 +97,15 @@ int main()
         keys.push_back(privat.secret());
     }
 
-    while (true)
+    bool is_exit = false;
+    while (!is_exit)
     {
         std::cout << "MAIN MENU" << std::endl;
         std::cout << "1. New key" << std::endl;
         std::cout << "2. Receive addresses" << std::endl;
         std::cout << "3. Show history and balance" << std::endl;
+        std::cout << "4. Send funds" << std::endl;
+        std::cout << "5. Exit" << std::endl;
 
         int choice = 0;
         std::cin >> choice;
@@ -120,6 +130,18 @@ int main()
             if (!result)
                 break;
             display_history(*result);
+            break;
+        }
+        case 4:
+        {
+            const auto destinations = prompt_destinations();
+            break;
+        }
+        case 5:
+        {
+            std::cout << "Saving wallet to wallet.dat" << std::endl;
+            save_keys(keys, "wallet.dat");
+            is_exit = true;
             break;
         }
         default:
