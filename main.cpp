@@ -77,6 +77,30 @@ auto prompt_destinations()
     std::vector<std::tuple<bcs::wallet::payment_address, uint64_t>>
         destinations;
 
+    while (true)
+    {
+        std::string address;
+        std::cout << "Address: ";
+        std::cin >> address;
+
+        std::string amount_string;
+        std::cout << "Amount: ";
+        std::cin >> amount_string;
+
+        uint64_t value;
+        auto rc = bcs::decode_base10(value, amount_string, 8);
+        BITCOIN_ASSERT(rc);
+
+        destinations.emplace_back(std::make_tuple(
+            bcs::wallet::payment_address(address), value));
+
+        std::cout << "Continue? [Y/n] ";
+        std::string is_continue;
+        std::cin >> is_continue;
+        if (is_continue != "y" && is_continue != "Y")
+            break;
+    }
+
     return destinations;
 }
 
@@ -101,6 +125,58 @@ void load_keys(auto& keys, const auto& filename)
         BITCOIN_ASSERT(rc);
         keys.push_back(secret);
     }
+}
+
+std::optional<bcs::chain::point::list> select_outputs(
+    const auto& keys, const auto value)
+{
+    const auto addresses = convert_keys_to_addresses(keys);
+    const auto history_result = get_history(addresses);
+    if (!history_result)
+        return std::nullopt;
+
+    uint64_t total = 0;
+    bcs::chain::point::list unspent;
+    for (const auto& [address, history]: *history_result)
+    {
+        for (const auto& row: history)
+        {
+            // Skip spent outputs
+            if (row.spend_height != bcs::max_uint64)
+                continue;
+
+            // Unspent output
+            total += value;
+            unspent.push_back(row.output);
+
+            if (total >= value)
+                goto break_loop;
+        }
+    }
+    if (total < value)
+        return std::nullopt;
+break_loop:
+    BITCOIN_ASSERT(total >= value);
+    return unspent;
+}
+
+bool send_funds(const auto& destinations, const auto& keys)
+{
+    // sum values in dest
+    auto fold = [](uint64_t total,
+        std::tuple<bcs::wallet::payment_address, uint64_t> destination)
+    {
+        return total + std::get<1>(destination);
+    };
+    auto sum = std::accumulate(
+        destinations.begin(), destinations.end(), 0, fold);
+
+    // select unspent outputs where sum(outputs) >= sum
+    const auto unspent = select_outputs(keys, sum);
+    if (!unspent)
+        return false;
+
+    // build tx
 }
 
 int main()
@@ -156,6 +232,7 @@ int main()
         case 4:
         {
             const auto destinations = prompt_destinations();
+            send_funds(destinations, keys);
             break;
         }
         case 5:
