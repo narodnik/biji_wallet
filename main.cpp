@@ -277,7 +277,7 @@ auto confirm_transaction(const auto& tx)
     return is_continue == "y" || is_continue == "Y";
 }
 
-void broadcast_transaction(const auto& tx)
+void broadcast(const auto& tx)
 {
     std::cout << std::endl;
     std::cout << "Sending: " << bcs::encode_base16(tx.to_data()) << std::endl;
@@ -375,7 +375,7 @@ int main()
             }
             if (!confirm_transaction(*tx))
                 break;
-            broadcast_transaction(*tx);
+            broadcast(*tx);
             break;
         }
         case 5:
