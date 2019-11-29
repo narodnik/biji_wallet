@@ -47,7 +47,7 @@ std::optional<history_map> get_history(const auto& addresses)
     bcc::socket_stream stream(socket);
 
     // Wait 2 seconds for the connection, with no failure retries.
-    bcc::proxy proxy(stream, unknown_handler, 2000, 0);
+    bcc::proxy proxy(stream, unknown_handler, 4000, 0);
 
     std::mutex mutex;
     history_map histories;
@@ -67,7 +67,7 @@ std::optional<history_map> get_history(const auto& addresses)
     zmq::poller poller;
     poller.add(socket);
 
-    while (poller.wait(1000).contains(socket.id()))
+    while (poller.wait(4000).contains(socket.id()))
         stream.read(proxy);
 
     if (is_error)

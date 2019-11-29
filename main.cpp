@@ -8,6 +8,8 @@
 namespace bcs = bc;
 namespace bcc = bc::client;
 
+using endorsement_list = std::vector<bcs::endorsement>;
+
 // Not testable due to lack of random engine injection.
 bcs::data_chunk new_seed(size_t bit_length=192)
 {
@@ -30,20 +32,23 @@ bcs::ec_secret new_key()
     return new_key(seed);
 }
 
+bcs::wallet::payment_address convert_key_to_address(const auto& secret)
+{
+    if (is_testnet)
+    {
+        bcs::wallet::ec_private privat(
+            secret, bcs::wallet::ec_private::testnet);
+        return privat;
+    }
+
+    return bcs::wallet::ec_private(secret);
+}
+
 auto convert_keys_to_addresses(const auto& keys)
 {
     std::vector<bcs::wallet::payment_address> addresses;
     for (const auto& secret: keys)
-    {
-        if (is_testnet)
-        {
-            bcs::wallet::ec_private privat(
-                secret, bcs::wallet::ec_private::testnet);
-            addresses.emplace_back(privat);
-        }
-        else
-            addresses.emplace_back(secret);
-    }
+        addresses.push_back(convert_key_to_address(secret));
     return addresses;
 }
 
@@ -94,7 +99,7 @@ auto prompt_destinations()
         destinations.emplace_back(std::make_tuple(
             bcs::wallet::payment_address(address), value));
 
-        std::cout << "Continue? [Y/n] ";
+        std::cout << "Add another output? [Y/n] ";
         std::string is_continue;
         std::cin >> is_continue;
         if (is_continue != "y" && is_continue != "Y")
@@ -127,16 +132,23 @@ void load_keys(auto& keys, const auto& filename)
     }
 }
 
-std::optional<bcs::chain::point::list> select_outputs(
-    const auto& keys, const auto value)
+using point_key_tuple =
+    std::tuple<bcs::chain::output_point, bcs::ec_secret>;
+using point_key_list = std::vector<point_key_tuple>;
+
+std::optional<point_key_list> select_outputs(const auto& keys, const auto value)
 {
     const auto addresses = convert_keys_to_addresses(keys);
     const auto history_result = get_history(addresses);
     if (!history_result)
         return std::nullopt;
 
+    std::map<bcs::wallet::payment_address, bcs::ec_secret> keys_map;
+    for (auto i = 0; i < keys.size(); ++i)
+        keys_map[addresses[i]] = keys[i];
+
     uint64_t total = 0;
-    bcs::chain::point::list unspent;
+    point_key_list unspent;
     for (const auto& [address, history]: *history_result)
     {
         for (const auto& row: history)
@@ -145,9 +157,11 @@ std::optional<bcs::chain::point::list> select_outputs(
             if (row.spend_height != bcs::max_uint64)
                 continue;
 
+            const auto& key = keys_map[address];
+
             // Unspent output
-            total += value;
-            unspent.push_back(row.output);
+            total += row.value;
+            unspent.push_back({ row.output, key });
 
             if (total >= value)
                 goto break_loop;
@@ -160,7 +174,8 @@ break_loop:
     return unspent;
 }
 
-bool send_funds(const auto& destinations, const auto& keys)
+std::optional<bcs::chain::transaction> build_transaction(
+    const auto& destinations, const auto& keys)
 {
     // sum values in dest
     auto fold = [](uint64_t total,
@@ -174,9 +189,129 @@ bool send_funds(const auto& destinations, const auto& keys)
     // select unspent outputs where sum(outputs) >= sum
     const auto unspent = select_outputs(keys, sum);
     if (!unspent)
-        return false;
+    {
+        std::cerr << "Not enough funds for send." << std::endl;
+        return std::nullopt;
+    }
 
     // build tx
+    bcs::chain::transaction tx;
+    tx.set_version(1);
+    tx.set_locktime(0);
+
+    bcs::chain::input::list inputs;
+    for (const auto& [previous_output, key]: *unspent)
+    {
+        bcs::chain::input input;
+        input.set_previous_output(previous_output);
+        input.set_sequence(bcs::max_uint32);
+        inputs.push_back(std::move(input));
+    }
+    tx.set_inputs(inputs);
+
+    bcs::chain::output::list outputs;
+    for (const auto& [address, value]: destinations)
+    {
+        outputs.push_back({
+            value,
+            bcs::chain::script::to_pay_key_hash_pattern(address.hash())
+        });
+    }
+    tx.set_outputs(std::move(outputs));
+
+    // sign tx
+    for (auto i = 0; i < unspent->size(); ++i)
+    {
+        const auto& [previous_output, key] = unspent->at(i);
+
+        const auto address = convert_key_to_address(key);
+
+        bcs::chain::script prevout_script =
+            bcs::chain::script::to_pay_key_hash_pattern(address.hash());
+
+        bcs::endorsement endorsement;
+        auto rc = bcs::chain::script::create_endorsement(endorsement,
+            key, prevout_script, tx, i, bcs::machine::sighash_algorithm::all);
+
+        bcs::wallet::ec_public public_key(key);
+
+        bcs::chain::script input_script({
+            { endorsement },
+            bcs::machine::operation({
+                public_key.point().begin(), public_key.point().end() })
+        });
+
+        inputs[i].set_script(input_script);
+    }
+    tx.set_inputs(inputs);
+
+    return tx;
+}
+
+auto confirm_transaction(const auto& tx)
+{
+    std::cout << std::endl;
+    std::cout << "tx hash: " << bcs::encode_hash(tx.hash()) << std::endl;
+
+    for (const auto& input: tx.inputs())
+    {
+        const auto& prevout = input.previous_output();
+        std::cout << "Prevout: " << bcs::encode_base16(prevout.hash()) << ":"
+            << prevout.index() << std::endl;
+        std::cout << "Input script: " <<
+            input.script().to_string(bcs::machine::rule_fork::all_rules)
+            << std::endl;
+    }
+
+    for (const auto& output: tx.outputs())
+    {
+        std::cout << "Value: " << output.value() << std::endl;
+        std::cout << "Output script: " <<
+            output.script().to_string(bcs::machine::rule_fork::all_rules)
+            << std::endl;
+    }
+
+    std::cout << "Send transaction? [y/N] ";
+    std::string is_continue;
+    std::cin >> is_continue;
+    return is_continue == "y" || is_continue == "Y";
+}
+
+void broadcast_transaction(const auto& tx)
+{
+    std::cout << std::endl;
+    std::cout << "Sending: " << bcs::encode_base16(tx.to_data()) << std::endl;
+    std::cout << std::endl;
+
+    // Bound parameters.
+    bcc::obelisk_client client(4000, 0);
+
+    std::cout << "Connecting to " << blockchain_server_address
+        << "..." << std::endl;
+    const auto endpoint = bcs::config::endpoint(blockchain_server_address);
+
+    if (!client.connect(endpoint))
+    {
+        std::cerr << "Cannot connect to server" << std::endl;
+        return;
+    }
+
+    std::atomic<bool> is_error = false;
+
+    auto on_error = [&is_error](const bcs::code& code)
+    {
+        std::cout << "error: " << code.message() << std::endl;
+        is_error = true;
+    };
+
+    auto on_done = [](const bcs::code&)
+    {
+        std::cout << "Broadcasted." << std::endl;
+    };
+
+    // This validates the tx, submits it to local tx pool, and notifies peers.
+    client.transaction_pool_broadcast(on_error, on_done, tx);
+    client.wait();
 }
 
 int main()
@@ -232,7 +367,15 @@ int main()
         case 4:
         {
             const auto destinations = prompt_destinations();
-            send_funds(destinations, keys);
+            const auto tx = build_transaction(destinations, keys);
+            if (!tx)
+            {
+                std::cerr << "Not enough funds." << std::endl;
+                break;
+            }
+            if (!confirm_transaction(*tx))
+                break;
+            broadcast_transaction(*tx);
             break;
         }
         case 5:
