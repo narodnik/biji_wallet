@@ -8,4 +8,4 @@ Description: biji serok apo
 Version: @PACKAGE_VERSION@
 Requires: libbitcoin >= 3.6.0 libbitcoin-client >= 3.6.0
 Libs: -L${libdir} -lbiji
-Cflags: -I${includedir}
+Cflags: -I${includedir} -std=c++2a
