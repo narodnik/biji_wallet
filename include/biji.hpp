@@ -1,6 +1,7 @@
 #ifndef BIJI_BIJI_HPP
 #define BIJI_BIJI_HPP
 
+#include <optional>
 #include <string>
 #include <bitcoin/bitcoin.hpp>
 #include <bitcoin/client.hpp>
