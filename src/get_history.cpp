@@ -1,20 +1,13 @@
-#ifndef BIJIWALLET_GET_HISTORY_IPP
-#define BIJIWALLET_GET_HISTORY_IPP
+#include <biji.hpp>
 
 #include <atomic>
 #include <iostream>
-#include <memory>
-#include <optional>
-#include <bitcoin/client.hpp>
-#include "config.hpp"
 
-namespace bcs = bc;
-namespace bcc = bc::client;
 namespace zmq = bc::protocol::zmq;
-using history_list = bc::chain::history::list;
-using history_map = std::map<bcs::wallet::payment_address, history_list>;
 
-std::optional<history_map> get_history(const auto& addresses)
+namespace biji {
+
+std::optional<history_map> get_history(const address_list& addresses)
 {
     // Set up the server connection.
     zmq::context context;
@@ -76,5 +69,5 @@ std::optional<history_map> get_history(const auto& addresses)
     return histories;
 }
 
-#endif // BIJIWALLET_GET_HISTORY_IPP
+} // namespace biji
 
