@@ -1,0 +1,12 @@
+Install instructions:
+
+  $ mkdir build
+  $ cd build
+  $ cmake ..
+  $ make
+  $ sudo make install
+
+Now the library is accessible on your system through pkg-config.
+
+See the examples directory and the corresponding make.sh script.
+
