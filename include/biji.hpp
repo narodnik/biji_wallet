@@ -43,7 +43,8 @@ void load_keys(keys_list& keys, const std::string& filename);
 std::optional<history_map> get_history(const address_list& addresses);
 
 std::optional<bcs::chain::transaction> build_transaction(
-    const transaction_destination_list& destinations, const keys_list& keys);
+    const transaction_destination_list& destinations, const keys_list& keys,
+    const transaction_destination& change);
 
 void broadcast(const bcs::chain::transaction& tx);
 

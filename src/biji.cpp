@@ -110,7 +110,8 @@ break_loop:
 }
 
 std::optional<bcs::chain::transaction> build_transaction(
-    const transaction_destination_list& destinations, const keys_list& keys)
+    const transaction_destination_list& destinations, const keys_list& keys,
+    const transaction_destination& change)
 {
     // sum values in dest
     auto fold = [](uint64_t total,
