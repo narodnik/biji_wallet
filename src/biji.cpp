@@ -107,7 +107,7 @@ std::tuple<std::optional<point_key_list>, uint64_t>
    		return std::make_tuple(std::nullopt, total);
 break_loop:
     BITCOIN_ASSERT(total >= value);
-	return std::make_tuple(unspent, total);
+	return std::make_tuple(unspent, total - value);
 }
 
 std::optional<bcs::chain::transaction> build_transaction(
