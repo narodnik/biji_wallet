@@ -71,18 +71,19 @@ void load_keys(keys_list& keys, const std::string& filename)
     }
 }
 
-std::optional<point_key_list> select_outputs(const auto& keys, const auto value)
+std::tuple<std::optional<point_key_list>, uint64_t> 
+	select_outputs(const auto& keys, const auto value)
 {
     const auto addresses = convert_keys_to_addresses(keys);
     const auto history_result = get_history(addresses);
+    uint64_t total = 0;
     if (!history_result)
-        return std::nullopt;
+   		return std::make_tuple(std::nullopt, total);
 
     std::map<bcs::wallet::payment_address, bcs::ec_secret> keys_map;
     for (auto i = 0; i < keys.size(); ++i)
         keys_map[addresses[i]] = keys[i];
 
-    uint64_t total = 0;
     point_key_list unspent;
     for (const auto& [address, history]: *history_result)
     {
@@ -103,10 +104,10 @@ std::optional<point_key_list> select_outputs(const auto& keys, const auto value)
         }
     }
     if (total < value)
-        return std::nullopt;
+   		return std::make_tuple(std::nullopt, total);
 break_loop:
     BITCOIN_ASSERT(total >= value);
-    return unspent;
+	return std::make_tuple(unspent, total - value);
 }
 
 std::optional<bcs::chain::transaction> build_transaction(
@@ -123,7 +124,7 @@ std::optional<bcs::chain::transaction> build_transaction(
         destinations.begin(), destinations.end(), 0, fold);
 
     // select unspent outputs where sum(outputs) >= sum
-    const auto unspent = select_outputs(keys, sum);
+    const auto [unspent, change_value] = select_outputs(keys, sum);
     if (!unspent)
     {
         std::cerr << "Not enough funds for send." << std::endl;
@@ -153,6 +154,15 @@ std::optional<bcs::chain::transaction> build_transaction(
             bcs::chain::script::to_pay_key_hash_pattern(address.hash())
         });
     }
+	
+	// add the change to outputs
+	if (change_value > 0){
+		outputs.push_back({
+			change_value,
+			bcs::chain::script::to_pay_key_hash_pattern(std::get<0>(change).hash())
+		});
+	}
+
     tx.set_outputs(std::move(outputs));
 
     // sign tx

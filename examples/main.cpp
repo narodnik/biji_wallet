@@ -58,6 +58,11 @@ auto prompt_destinations()
     return destinations;
 }
 
+auto get_change(const std::vector<bcs::ec_secret>& keys ) {
+	const auto addresses = convert_keys_to_addresses(keys);
+	return std::make_tuple(bcs::wallet::payment_address(addresses.front()), 0);
+}
+
 auto confirm_transaction(const auto& tx)
 {
     std::cout << std::endl;
@@ -140,7 +145,8 @@ int main()
         case 4:
         {
             const auto destinations = prompt_destinations();
-            const auto tx = build_transaction(destinations, keys);
+			transaction_destination change = get_change(keys);
+            const auto tx = build_transaction(destinations, keys, change);
             if (!tx)
             {
                 std::cerr << "Not enough funds." << std::endl;
